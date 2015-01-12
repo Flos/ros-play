@@ -1,0 +1,56 @@
+<launch>
+	<param name="use_sim_time" 			value="true" />
+	<arg name="filter"					default="1" />
+	<arg name="rate"					default="0.5" />
+	<arg name="usebag_tf" 				default="0" />
+	<arg name="tf_calibration" 			default="0" />
+	<arg name="bag_start_time"			default="50" />
+	<arg name="bag_delay"				default="3" />
+	<arg name="match_image_pointcloud"	default="0" />
+	<arg name="state_publisher"			default="false" />
+	<arg name="nodelet_manager_name" 	default="ladybug_nodelet_manager" />
+	<arg name="path" 					default="/home/fnolden/bagfile/set1/" />
+	<arg name="files" default="$(arg path)barney_description_2014-10-28-23-17-28_1.bag 
+							   $(arg path)barney_diag_2014-10-28-23-17-28_1.bag
+							   $(arg path)barney_ladybug_2014-10-28-23-17-27_1.bag
+							   $(arg path)barney_diag_2014-10-28-23-17-28_1.bag
+							   $(arg path)barney_scans_gen_2014-10-28-23-17-27_1.bag
+							   " />
+
+	<node pkg="rosbag" type="play" name="player" output="screen" args="--clock --rate $(arg rate) $(arg files) -s $(arg bag_start_time) -d $(arg bag_delay)">
+		<remap unless="$(arg usebag_tf)" from="/tf" to="/tf_old" />
+	</node>
+	
+	<!-- Robot description -->
+	<param name="robot_description" command="$(find xacro)/xacro.py '$(find barney)/urdf/barney.urdf.xacro'"  	if="$(arg usebag_tf)"/>
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" 						if="$(arg state_publisher)" />
+	
+	<!-- get static transforms -->
+    <include file="$(find barney)/launch/ekf.launch"  			unless="$(arg usebag_tf)" />
+    <include file="$(find barney)/launch/description.launch" 	unless="$(arg usebag_tf)" >
+		<arg name="demo" value="true"/>
+    </include>
+    <include file="$(find barney)/launch/transforms.launch" 	unless="$(arg usebag_tf)" />
+	
+    <!-- start filter -->
+    <include file="$(find cloud_aggregator)/launch/aggregator.launch" if="$(arg filter)" />
+    <include file="$(find pcl_filter)/launch/filter.launch" 		  if="$(arg filter)" />
+   
+	<!-- Calibration -->
+    <include file="$(find tf2_dynamic)/launch/tf2_dynamic.launch" if="$(arg tf_calibration)">
+    	<arg name="parent_frame" value="ladybug_camera4"/>
+    	<arg name="child_frame"  value="ladybug_camera4_calibrated"/>
+    </include>
+  	
+ 	<!-- Vision -->
+    <include file="$(find ladybug)/launch/full.launch">
+ 		<arg name="nodelet_manager_name" value="$(arg nodelet_manager_name)"/>
+ 		<arg name="connect"				 value="false"/>
+ 		<arg name="threads"				 value="12"/>
+    </include>
+    
+ 	<include file="$(find start)/launch/process_camera_pointcloud.launch" if="$(arg match_image_pointcloud)">
+ 		<arg name="camera"			value="4" />
+ 		<arg name="nodelet_manager" value="$(arg nodelet_manager_name)"/>
+ 	</include>
+</launch>
