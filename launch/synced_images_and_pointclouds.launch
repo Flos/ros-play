@@ -6,8 +6,8 @@
 	<arg name="bag_delay"				default="7" />
 	<arg name="rate"					default="1" />
 	<arg name="play_arg"				default="--rate $(arg rate) --clock -s $(arg bag_start_time) -d $(arg bag_delay)" />
-	<arg name="path" 					default="/home/fnolden/bagfile/set1_extracted/" />
-	<arg name="files" 					default="$(arg path)data_2015-01-10-19-41-00.bag
+	<arg name="path" 					default="/home/fnolden/bagfile/set1_extracted_full/" />
+	<arg name="files" 					default="$(arg path)data_2015-01-12-16-43-37.bag
 							  				 " />
 			
 	<node pkg="rosbag" type="play" name="player" output="screen" args="$(arg files) $(arg play_arg)">

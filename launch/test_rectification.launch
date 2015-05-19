@@ -1,0 +1,86 @@
+<launch>
+	<param name="use_sim_time" 			value="true" />
+	<arg name="nr"	/>
+	<arg name="export"					default="1" />
+	<arg name="filter"					default="0" />
+	<arg name="rate"					default="0.5" />
+	<arg name="usebag_tf" 				default="1" />
+	<arg name="tf_calibration" 			default="0" />
+	<arg name="bag_start_time"			default="0" />
+	<arg name="bag_delay"				default="3" />
+	<arg name="match_image_pointcloud"	default="1" />
+	<arg name="state_publisher"			default="0" />
+	<arg name="save"					default="0" />
+	<arg name="nodelet_manager_name" 	default="ladybug_nodelet_manager" />
+	<arg name="path" 					default="/media/Daten/bagfiles/fh-campus/$(arg nr)/" />
+	<arg name="path_kitti"				default="/media/Daten/kitti/barney/fh-campus-4-recti/000$(arg nr)/" />
+	<arg name="files" default="$(arg path)description.no_ekf.bag 
+								/media/Daten/bagfiles/fh-campus/3/description.no_ekf.bag
+								/media/Daten/bagfiles/fh-campus/3/ladybug5_camera.bag
+								/media/Daten/bagfiles/fh-campus/3/velodyne.bag
+							   $(arg path)diag.bag
+							   $(arg path)hokuyo.bag
+							   $(arg path)imu.bag
+							   $(arg path)ladybug5_camera.bag
+							   $(arg path)ladybug5_panoramic.bag
+							   $(arg path)ladybug5_sensors.bag
+							   $(arg path)velodyne.bag
+							   " />
+
+	<node pkg="rosbag" type="play" name="player" output="screen" args="--clock --rate $(arg rate) $(arg files) -s $(arg bag_start_time) -d $(arg bag_delay)">
+		<remap unless="$(arg usebag_tf)" from="/tf" to="/tf_old" />
+	</node>
+	
+	<!-- Robot description -->
+	<param name="robot_description" command="$(find xacro)/xacro.py '$(find barney)/urdf/barney.urdf.xacro'"  	if="$(arg usebag_tf)"/>
+	
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" 			 if="$(arg state_publisher)" />
+	
+	<include file="$(find barney)/launch/ekf.launch" />
+	
+	<!-- get static transforms -->   
+    <include file="$(find barney)/launch/description.launch" 	unless="$(arg usebag_tf)" >
+		<arg name="demo" value="true"/>
+    </include>
+    <include file="$(find barney)/launch/transforms.launch" 	unless="$(arg usebag_tf)" />
+	
+    <!-- start filter -->
+    <include file="$(find barney)/launch/velodyne_rectify.launch" />
+    <include file="$(find pcl_filter)/launch/filter.launch" if="$(arg filter)" />
+   
+	<!-- Calibration -->
+    <include file="$(find tf2_dynamic)/launch/tf2_dynamic.launch" if="$(arg tf_calibration)">
+    	<arg name="parent_frame" value="ladybug_camera4"/>
+    	<arg name="child_frame"  value="ladybug_camera4_calibrated"/>
+    </include>
+  	
+ 	<!-- Vision -->
+    <include file="$(find ladybug)/launch/test_rectifier.launch">
+ 		<arg name="nodelet_manager_name" value="$(arg nodelet_manager_name)"/>
+ 		<arg name="threads"				 value="12"/>
+ 		<arg name="zoom"				 value="2.2" />
+ 		<arg name="camera"				 value="4" />
+    </include>
+		
+ 	<include file="$(find kitti)/launch/extract_nodelet.launch" if="$(arg export)" >
+ 		<arg name="nodelet_manager"			value="$(arg nodelet_manager_name)" />
+		<arg name="data_prefix"				value="$(arg path_kitti)" />
+		<arg name="sync_topic"				value="/cloud_aggregator/add" />
+		<arg name="subscribe_topics_pcl"	value="[/cloud_aggregator/add, /velodyne/cloud]" />
+		<arg name="pcl_frame_ids" 			value="[ladybug_camera4_rotated, ladybug_camera4_rotated]" /> 	
+		
+													
+		<arg name="subscribe_topics_image"	value=  "[/ladybug5/camera4zoomed_rotate/image_color_rect,
+													  /ladybug5/camera4rotate/image_color_rect,
+													  /ladybug5/camera4zoomed/image_color_rect,
+													  /ladybug5/camera4/image_color_rect]" />
+													
+		<arg name="subscribe_topics_image_info"	value=  "[/ladybug5/camera4zoomed_rotate/image_color_rect_info,
+														  /ladybug5/camera4rotate/image_color_rect_info,
+														  /ladybug5/camera4zoomed/image_color_rect_info,
+														  /ladybug5/camera4/image_color_rect_info]" />
+															  
+		<arg name="camera_frame_ids" 				value="[]"/>
+ 	</include>
+ 	
+</launch>

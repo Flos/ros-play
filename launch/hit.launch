@@ -1,0 +1,88 @@
+<launch>
+	<param name="use_sim_time" 			value="true" />
+	<arg name="nr"	/>
+	<arg name="export"					default="0" />
+	<arg name="filter"					default="0" />
+	<arg name="rate"					default="0.5" />
+	<arg name="usebag_tf" 				default="1" />
+	<arg name="tf_calibration" 			default="0" />
+	<arg name="bag_start_time"			default="0" />
+	<arg name="bag_delay"				default="3" />
+	<arg name="match_image_pointcloud"	default="0" />
+	<arg name="state_publisher"			default="0" />
+	<arg name="test_features"			default="1" />
+	<arg name="save"					default="0" />
+	<arg name="nodelet_manager_name" 	default="ladybug_nodelet_manager" />
+	<arg name="path" 					default="/media/Daten/bagfiles/hit/$(arg nr)/" />
+	<arg name="files" default="$(arg path)description.bag 
+							   $(arg path)diag.bag
+							   $(arg path)ladybug.bag
+							   $(arg path)diag.bag
+							   $(arg path)scans_gen.bag
+							   " />
+
+	<node pkg="rosbag" type="play" name="player" output="screen" args="--clock --rate $(arg rate) $(arg files) -s $(arg bag_start_time) -d $(arg bag_delay)">
+		<remap unless="$(arg usebag_tf)" from="/tf" to="/tf_old" />
+	</node>
+	
+	<!-- Robot description -->
+	<param name="robot_description" command="$(find xacro)/xacro.py '$(find barney)/urdf/barney.urdf.xacro'"  	if="$(arg usebag_tf)"/>
+	
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" 			 if="$(arg state_publisher)" />
+	
+	
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_0_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera0 ladybug_camera0_rotated 100" />
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_1_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera1 ladybug_camera1_rotated 100" />
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_2_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera2 ladybug_camera2_rotated 100" />
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_3_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera3 ladybug_camera3_rotated 100" />
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_4_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera4 ladybug_camera4_rotated 100" />
+	<node pkg="tf" type="static_transform_publisher" name="ladybug_camera_5_rotated" args="0 0 0 -1.56457 0 0 ladybug_camera5 ladybug_camera5_rotated 100" />
+
+	<!-- get static transforms -->
+    <include file="$(find barney)/launch/ekf.launch"  			unless="$(arg usebag_tf)" />
+    <include file="$(find barney)/launch/description.launch" 	unless="$(arg usebag_tf)" >
+		<arg name="demo" value="true"/>
+    </include>
+    <include file="$(find barney)/launch/transforms.launch" 	unless="$(arg usebag_tf)" />
+	
+    <!-- start filter -->
+    <include file="$(find cloud_aggregator)/launch/aggregator.launch" if="$(arg filter)" />
+    <include file="$(find pcl_filter)/launch/filter.launch" 		  if="$(arg filter)" />
+   
+	<!-- Calibration -->
+    <include file="$(find tf2_dynamic)/launch/tf2_dynamic.launch" if="$(arg tf_calibration)">
+    	<arg name="parent_frame" value="ladybug_camera4"/>
+    	<arg name="child_frame"  value="ladybug_camera4_calibrated"/>
+    </include>
+  	
+ 	<!-- Vision -->
+    <include file="$(find ladybug)/launch/full.launch">
+ 		<arg name="nodelet_manager_name" value="$(arg nodelet_manager_name)"/>
+ 		<arg name="connect"				 value="false"/>
+ 		<arg name="threads"				 value="12"/>
+ 		<arg name="rotate"				 value="false"/>
+ 		<arg name="zoom"				 value="1.0" />
+    </include>
+    
+ 	<include file="$(find start)/launch/process_camera_pointcloud.launch" if="$(arg match_image_pointcloud)">
+ 		<arg name="camera"				value="4" />
+ 		<arg name="subscribe_topic_pcl" value="/cloud_aggregator/filtered" 	if="$(arg filter)"/>
+ 		<arg name="subscribe_topic_pcl" value="/velodyne/cloud" 			unless="$(arg filter)"/>
+ 		<arg name="nodelet_manager" 	value="/$(arg nodelet_manager_name)"/>
+ 		<arg name="save"				value="$(arg save)" />
+ 		<arg name="feature"				value="3" />
+ 	</include>
+ 	
+ 	<include file="$(find fiddle)/launch/pcl_to_pointcloud_all_features.launch" if="$(arg test_features)">
+ 		<arg name="camera"				value="4" />
+ 		<arg name="subscribe_topic_pcl" value="/cloud_aggregator/filtered" 	if="$(arg filter)"/>
+ 		<arg name="subscribe_topic_pcl" value="/velodyne/cloud" 			unless="$(arg filter)"/>
+ 		<arg name="nodelet_manager" 	value="/$(arg nodelet_manager_name)"/>
+ 		<arg name="save"				value="$(arg save)" />
+ 	</include>
+ 	
+ 	<include file="$(find record)/launch/kitti_extract_raw_ladybug.launch" if="$(arg export)" >
+		<arg name="data_prefix"					value="/media/Daten/kitti/barney/hit/000$(arg nr)_all/" />
+ 	</include>
+ 	
+</launch>
